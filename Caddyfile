@@ -1,0 +1,18 @@
+:8080 {
+	root * /srv
+	encode zstd gzip
+
+	# SPA fallback — all unmatched paths serve index.html so
+	# React Router handles client-side navigation correctly.
+	try_files {path} /index.html
+
+	file_server
+
+	# Cache static assets aggressively; index.html must never be cached
+	# so the app always loads the latest build.
+	@assets {
+		path /assets/*
+	}
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	header /index.html Cache-Control "no-cache, no-store, must-revalidate"
+}

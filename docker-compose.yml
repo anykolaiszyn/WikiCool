@@ -1,0 +1,21 @@
+services:
+  vcc-wiki:
+    image: vcc-wiki:latest
+    build:
+      context: .
+      args:
+        VITE_GITHUB_OWNER: ${VITE_GITHUB_OWNER}
+        VITE_GITHUB_REPO: ${VITE_GITHUB_REPO}
+        VITE_GITHUB_BRANCH: ${VITE_GITHUB_BRANCH:-main}
+        VITE_CONTENT_PATH: ${VITE_CONTENT_PATH:-content}
+        # Optional: leave blank to use the runtime login prompt instead.
+        VITE_GITHUB_TOKEN: ${VITE_GITHUB_TOKEN:-}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      # Caddy needs writable space for its data and config directories.
+      - /data
+      - /config
+      - /tmp

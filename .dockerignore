@@ -1,0 +1,8 @@
+node_modules
+dist
+.git
+.env*
+# Exclude markdown docs but keep README.md
+*.md
+!README.md
+Prompt/
