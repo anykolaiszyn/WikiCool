@@ -1,0 +1,32 @@
+{
+  "name": "vcc-wiki",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 8080",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codemirror/lang-markdown": "^6.3.2",
+    "@octokit/rest": "^21.1.1",
+    "@uiw/react-codemirror": "^4.23.10",
+    "gray-matter": "^4.0.3",
+    "minisearch": "^7.1.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.3",
+    "react-router-dom": "^6.30.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "^5.7.3",
+    "vite": "^5.4.11"
+  }
+}
