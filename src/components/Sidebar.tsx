@@ -189,6 +189,7 @@ export function Sidebar() {
       <div className="sidebar__top">
         <Link to="/new" className="sidebar__new-btn">+ New page</Link>
         <Link to="/category/" className="sidebar__all-link">All categories</Link>
+        <Link to="/graph" className={`sidebar__all-link${pathname === '/graph' ? ' sidebar__all-link--active' : ''}`}>Graph view</Link>
       </div>
 
       {loading && <SidebarSkeleton />}

@@ -19,6 +19,7 @@
   --ink-soft:     #544a3a;
   --rule:         #c9b99a;
   --rule-lt:      #ddd0ba;
+  --ink-faint:    #9e8e70;
   --accent:       #6b1a1a;
   --accent-soft:  #8a3838;
   --tobacco:      #7a5a2e;
@@ -510,6 +511,32 @@ pre code {
 
 .auth-btn:hover:not(:disabled) { background-color: var(--color-burgundy-dk); }
 .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* OAuth variant — uses GitHub's green-ish dark tone */
+.auth-btn--oauth {
+  background-color: #238636;
+  margin-bottom: 0;
+}
+.auth-btn--oauth:hover:not(:disabled) { background-color: #2ea043; }
+
+/* "or paste a token" divider */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
 
 .auth-err {
   font-size: 0.875rem;
@@ -1392,4 +1419,138 @@ pre code {
   @page {
     margin: 1.5cm 2cm;
   }
+}
+
+/* ============================================================
+   Graph View (VW-28)
+   ============================================================ */
+
+.graph-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--header-h, 56px) - 2rem);
+  gap: 0.5rem;
+}
+
+.graph-page-title {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.graph-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--paper);
+  overflow: hidden;
+  position: relative;
+  min-height: 400px;
+}
+
+.graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--paper) 95%, var(--ink) 5%);
+  flex-shrink: 0;
+}
+
+.graph-search {
+  font-family: var(--body);
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--paper);
+  color: var(--ink);
+  width: 220px;
+}
+
+.graph-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.graph-reset {
+  font-family: var(--body);
+  font-size: 0.8rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.graph-reset:hover {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+}
+
+.graph-count {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  margin-left: auto;
+}
+
+.graph-svg {
+  flex: 1;
+  width: 100%;
+  display: block;
+}
+
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.4rem 0.75rem;
+  border-top: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--paper) 95%, var(--ink) 5%);
+  flex-shrink: 0;
+}
+
+.graph-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--body);
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  text-transform: capitalize;
+}
+
+.graph-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.graph-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--body);
+  font-size: 0.9rem;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+/* sidebar graph link active state */
+.sidebar__all-link--active {
+  color: var(--accent);
+  font-weight: 600;
 }

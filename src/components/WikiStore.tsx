@@ -21,6 +21,7 @@ import { listAllPages, readPage } from '../lib/github'
 import { parsePage } from '../lib/markdown'
 import { buildBacklinkIndex } from '../lib/backlinks'
 import { buildSearchIndex } from '../lib/search'
+import { useLiveReload } from '../lib/livereload'
 import type { WikiPage, BacklinkIndex } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -131,6 +132,11 @@ export function WikiStoreProvider({ children }: { children: ReactNode }) {
       void reload()
     }
   }, [reload])
+
+  // Subscribe to the Worker's SSE stream. When the content repo is pushed,
+  // the Worker broadcasts a "refresh" event and this triggers a background
+  // reload so the UI reflects external edits within seconds.
+  useLiveReload(reload)
 
   const updatePageInCache = useCallback((updated: WikiPage) => {
     setPages((prev) => {

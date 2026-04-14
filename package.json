@@ -12,7 +12,9 @@
   "dependencies": {
     "@codemirror/lang-markdown": "^6.3.2",
     "@octokit/rest": "^21.1.1",
+    "@types/d3": "^7.4.3",
     "@uiw/react-codemirror": "^4.23.10",
+    "d3": "^7.9.0",
     "gray-matter": "^4.0.3",
     "minisearch": "^7.1.2",
     "react": "^18.3.1",

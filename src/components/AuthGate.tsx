@@ -1,5 +1,5 @@
 import { type FormEvent, type ReactNode, useState } from 'react'
-import { clearToken, hasToken, setToken } from '../lib/auth'
+import { clearToken, hasOAuthConfigured, hasToken, loginWithGitHub, setToken } from '../lib/auth'
 import { config, ping } from '../lib/github'
 
 interface AuthGateProps {
@@ -49,6 +49,7 @@ function LoginCard({ onSuccess }: { onSuccess: () => void }) {
   const [token, setTokenInput] = useState('')
   const [checking, setChecking] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const oauthAvailable = hasOAuthConfigured()
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -72,11 +73,35 @@ function LoginCard({ onSuccess }: { onSuccess: () => void }) {
     onSuccess()
   }
 
+  function handleOAuth() {
+    try {
+      loginWithGitHub()
+    } catch (err) {
+      setErr(err instanceof Error ? err.message : 'OAuth unavailable')
+    }
+  }
+
   return (
     <div className="auth-gate">
       <div className="auth-card">
         <h1 className="auth-title">The Archive</h1>
         <p className="auth-sub">{config.owner}/{config.repo}</p>
+
+        {oauthAvailable && (
+          <button
+            className="auth-btn auth-btn--oauth"
+            type="button"
+            onClick={handleOAuth}
+          >
+            Sign in with GitHub
+          </button>
+        )}
+
+        {oauthAvailable && (
+          <p className="auth-divider">
+            <span>or paste a token</span>
+          </p>
+        )}
 
         <form onSubmit={(e) => { void handleSubmit(e) }}>
           <input

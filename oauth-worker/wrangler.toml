@@ -1,0 +1,30 @@
+name               = "vcc-wiki-oauth"
+main               = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# Secrets — set with `wrangler secret put <NAME>`, never commit values here:
+#   GITHUB_CLIENT_ID      — OAuth App client ID
+#   GITHUB_CLIENT_SECRET  — OAuth App client secret
+#   APP_ORIGIN            — e.g. https://wiki.example.com
+#   WEBHOOK_SECRET        — secret you set when registering the GitHub webhook
+#
+# See oauth-worker/README.md for full setup instructions.
+
+[build]
+command = "npm run build"
+
+# ── Durable Objects ──────────────────────────────────────────────────────────
+# BroadcastRoom holds open SSE connections in memory and fans out refresh
+# events when a webhook push arrives.
+[[durable_objects.bindings]]
+name       = "BROADCAST_ROOM"
+class_name = "BroadcastRoom"
+
+[[migrations]]
+tag            = "v1"
+new_classes    = ["BroadcastRoom"]
+
+[[routes]]
+# Replace with your Worker route after deploying.
+# pattern   = "oauth.example.com/*"
+# zone_name = "example.com"

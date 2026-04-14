@@ -1,18 +1,26 @@
 /**
  * Auth module — VCC Wiki
  *
- * Current strategy: Personal Access Token (PAT).
+ * Token sources (checked in priority order)
+ * ──────────────────────────────────────────
+ *  1. `VITE_GITHUB_TOKEN` build-time env var — single-user homelab shortcut.
+ *     Bake a fine-grained PAT into `.env.local` and the app never shows a
+ *     login screen.
  *
- * Tokens are sourced in priority order:
- *   1. `VITE_GITHUB_TOKEN` build-time env var — convenient for single-user
- *      homelab deploys where the token can be baked into a `.env.local` file.
- *   2. `localStorage['vcc-wiki:gh-token']` — set at runtime via the login
- *      prompt. Tokens are stored only in the browser; they are never sent to
- *      any server other than api.github.com.
+ *  2. `localStorage['vcc-wiki:gh-token']` — set at runtime either by pasting
+ *     a PAT into the login form or by the OAuth callback handler. Tokens are
+ *     stored only in the browser and never sent to any server other than
+ *     api.github.com.
  *
- * The token must be a fine-grained PAT scoped to the content repo with
- * `Contents: Read+Write` and `Metadata: Read` permissions only.
- * See `docs/WIKI_REPO_SETUP.md` for generation and rotation guidance.
+ * OAuth flow (when VITE_OAUTH_BASE is set)
+ * ─────────────────────────────────────────
+ *  loginWithGitHub() redirects the user to the Cloudflare Worker's
+ *  /authorize endpoint. The Worker handles the GitHub OAuth round-trip and
+ *  redirects back to /auth/callback#access_token=<token>. The
+ *  AuthCallbackPage component reads the fragment and calls setToken().
+ *
+ *  Required env var: VITE_OAUTH_BASE  (e.g. https://oauth.example.com)
+ *  Optional env var: VITE_GITHUB_TOKEN (bypasses OAuth entirely)
  */
 
 const STORAGE_KEY = 'vcc-wiki:gh-token'
@@ -41,39 +49,34 @@ export function hasToken(): boolean {
   return getToken() !== null
 }
 
-/*
- * OAuth upgrade path (future work)
- * ---------------------------------
- * To replace PAT auth with a proper GitHub OAuth flow:
- *
- *  1. Register a GitHub OAuth App at github.com/settings/developers.
- *     Set the callback URL to your deployed app origin + `/auth/callback`.
- *
- *  2. Stand up a lightweight Cloudflare Worker (or similar edge function)
- *     that holds the OAuth `client_secret`. The worker receives the temporary
- *     `code` from GitHub's redirect and exchanges it for an access token via
- *     POST https://github.com/login/oauth/access_token. The secret never
- *     touches the browser.
- *
- *  3. In `loginWithGitHub`:
- *     a. Redirect the user to:
- *        https://github.com/login/oauth/authorize?client_id=<ID>&scope=repo&state=<nonce>
- *     b. On the `/auth/callback` route, extract `code` and `state` from the
- *        URL, verify the nonce, then POST `code` to the Cloudflare Worker.
- *     c. The worker returns `{ access_token }` — call `setToken(access_token)`
- *        and redirect to the wiki home.
- *
- *  Token scopes needed: `repo` (or `contents:write` for fine-grained apps).
- */
-
 /**
- * Initiate a GitHub OAuth login flow.
- * @throws Always — OAuth is not yet implemented. See comment above for the
- *   upgrade path when this stub needs to become real.
+ * Initiate a GitHub OAuth login flow via the Cloudflare Worker.
+ *
+ * Requires `VITE_OAUTH_BASE` to be set (e.g. https://oauth.example.com).
+ * The browser is redirected to the Worker's /authorize endpoint, which then
+ * handles the GitHub OAuth round-trip and redirects back to /auth/callback
+ * with the token in the URL fragment.
+ *
+ * Falls back to an error if `VITE_OAUTH_BASE` is not configured.
  */
-export async function loginWithGitHub(): Promise<void> {
-  throw new Error(
-    'OAuth not implemented. ' +
-    'Paste a fine-grained PAT via the login prompt or set VITE_GITHUB_TOKEN in .env.local.',
-  )
+export function loginWithGitHub(): void {
+  const oauthBase = import.meta.env.VITE_OAUTH_BASE?.trim()
+
+  if (!oauthBase) {
+    throw new Error(
+      'VITE_OAUTH_BASE is not set. ' +
+      'Either configure the OAuth Worker and set VITE_OAUTH_BASE, ' +
+      'or paste a fine-grained PAT via the login prompt.',
+    )
+  }
+
+  // Hard navigation — the Worker will redirect us back via /auth/callback.
+  const authorizeUrl = `${oauthBase}/authorize`
+  window.location.href = authorizeUrl
+}
+
+/** Return true if the OAuth Worker is configured. */
+export function hasOAuthConfigured(): boolean {
+  const base = import.meta.env.VITE_OAUTH_BASE?.trim()
+  return typeof base === 'string' && base.length > 0
 }
