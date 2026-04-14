@@ -1,3 +1,9 @@
+# Local development / manual build compose file.
+# All VITE_* variables must be set in your .env.local file (see .env.example).
+#
+# For Portainer deployment from GitHub, use docker-compose.portainer.yml instead.
+# See docs/PORTAINER_DEPLOY.md for full instructions.
+
 services:
   vcc-wiki:
     image: vcc-wiki:latest
@@ -10,6 +16,9 @@ services:
         VITE_CONTENT_PATH: ${VITE_CONTENT_PATH:-content}
         # Optional: leave blank to use the runtime login prompt instead.
         VITE_GITHUB_TOKEN: ${VITE_GITHUB_TOKEN:-}
+        # Optional: Cloudflare Worker base URL for OAuth and live-reload.
+        VITE_OAUTH_BASE: ${VITE_OAUTH_BASE:-}
+        VITE_WEBHOOK_BASE: ${VITE_WEBHOOK_BASE:-}
     ports:
       - "8080:8080"
     restart: unless-stopped

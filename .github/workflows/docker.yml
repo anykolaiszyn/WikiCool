@@ -1,0 +1,119 @@
+name: Build and publish Docker image
+
+# Triggers:
+#   - Every push to main         → builds, tags as `latest` and `sha-<short>`
+#   - Manual workflow_dispatch   → useful for rebuilding after secret rotation
+#
+# After a successful build, optionally pings the Portainer webhook to trigger
+# an immediate redeploy. Set PORTAINER_WEBHOOK_URL in repo secrets to enable.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  # GitHub lowercases image names; this matches ghcr.io/anykolaiszyn/wikicool
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build image and push to ghcr.io
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read   # checkout
+      packages: write  # push to ghcr.io
+
+    steps:
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Auth to ghcr.io ──────────────────────────────────────────────────
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 3. Extract image tags and labels ────────────────────────────────────
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # sha-<7-char-hash> for every build (pinnable)
+            type=sha,prefix=sha-
+            # `latest` only on the default branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # ── 4. QEMU for cross-compilation ───────────────────────────────────────
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # ── 5. Buildx for multi-platform builds ─────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 6. Build and push ───────────────────────────────────────────────────
+      #
+      # VITE_* variables are baked into the image at build time by Vite.
+      # They are sourced from GitHub Actions secrets / variables:
+      #
+      #   Secrets (Settings → Secrets and variables → Actions → Secrets):
+      #     VITE_GITHUB_OWNER   — GitHub username/org that owns the content repo
+      #     VITE_GITHUB_REPO    — content repo name (e.g. vcc-wiki-content)
+      #     VITE_GITHUB_TOKEN   — fine-grained PAT for the content repo (optional;
+      #                           leave unset to use the runtime login prompt)
+      #     PORTAINER_WEBHOOK_URL — Portainer stack webhook URL (optional;
+      #                           leave unset to skip auto-redeploy)
+      #
+      #   Variables (Settings → Secrets and variables → Actions → Variables):
+      #     VITE_GITHUB_BRANCH  — default branch of the content repo (default: main)
+      #     VITE_CONTENT_PATH   — content root inside the repo   (default: content)
+      #     VITE_OAUTH_BASE     — Cloudflare Worker URL for OAuth (optional)
+      #     VITE_WEBHOOK_BASE   — Cloudflare Worker URL for SSE   (optional)
+      #
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_GITHUB_OWNER=${{ secrets.VITE_GITHUB_OWNER }}
+            VITE_GITHUB_REPO=${{ secrets.VITE_GITHUB_REPO }}
+            VITE_GITHUB_BRANCH=${{ vars.VITE_GITHUB_BRANCH || 'main' }}
+            VITE_CONTENT_PATH=${{ vars.VITE_CONTENT_PATH || 'content' }}
+            VITE_GITHUB_TOKEN=${{ secrets.VITE_GITHUB_TOKEN }}
+            VITE_OAUTH_BASE=${{ vars.VITE_OAUTH_BASE }}
+            VITE_WEBHOOK_BASE=${{ vars.VITE_WEBHOOK_BASE }}
+          # Layer cache via GitHub Actions cache backend — dramatically speeds up
+          # incremental builds (node_modules layer is almost always a cache hit).
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── 7. Trigger Portainer redeploy ────────────────────────────────────────
+      # Portainer exposes a per-stack webhook URL that pulls the latest image
+      # and recreates the container. Set PORTAINER_WEBHOOK_URL as a repo secret
+      # to enable automatic redeploy after every successful image push.
+      - name: Trigger Portainer redeploy
+        if: ${{ success() && secrets.PORTAINER_WEBHOOK_URL != '' }}
+        run: |
+          echo "Pinging Portainer webhook…"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}")
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Portainer redeploy triggered (HTTP $HTTP_STATUS)"
+          else
+            echo "Warning: Portainer webhook returned HTTP $HTTP_STATUS"
+            exit 1
+          fi

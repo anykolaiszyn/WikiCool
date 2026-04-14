@@ -1,0 +1,35 @@
+# Portainer stack file — deploy this via Portainer's Git repository integration.
+#
+# This file pulls the pre-built image from GitHub Container Registry.
+# All VITE_* configuration is baked into the image by the GitHub Actions
+# workflow (.github/workflows/docker.yml) — no build args are needed here.
+#
+# How to use:
+#   1. Follow docs/PORTAINER_DEPLOY.md to set up the GitHub Actions workflow.
+#   2. In Portainer → Stacks → Add stack → Repository:
+#        Repository URL:     https://github.com/anykolaiszyn/WikiCool
+#        Compose path:       docker-compose.portainer.yml
+#        Branch:             main
+#   3. Set GHCR_USERNAME in the stack's environment variables (see guide).
+#   4. Deploy. Portainer will pull the latest image and start the container.
+#
+# To pin to a specific image digest instead of `latest`, change the image tag
+# to the sha- tag printed by the GitHub Actions build step:
+#   image: ghcr.io/anykolaiszyn/wikicool:sha-abc1234
+
+services:
+  vcc-wiki:
+    image: ghcr.io/anykolaiszyn/wikicool:latest
+    container_name: vcc-wiki
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /data
+      - /config
+      - /tmp
+    labels:
+      # These labels are purely informational — visible in Portainer's container list.
+      com.vcc.wiki.description: "Vice City Cigars internal wiki"
+      com.vcc.wiki.managed-by: "portainer"
