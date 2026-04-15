@@ -106,11 +106,17 @@ jobs:
       # and recreates the container. Set PORTAINER_WEBHOOK_URL as a repo secret
       # to enable automatic redeploy after every successful image push.
       - name: Trigger Portainer redeploy
-        if: ${{ success() && secrets.PORTAINER_WEBHOOK_URL != '' }}
+        if: success()
+        env:
+          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
         run: |
+          if [ -z "$PORTAINER_WEBHOOK_URL" ]; then
+            echo "PORTAINER_WEBHOOK_URL not set — skipping redeploy"
+            exit 0
+          fi
           echo "Pinging Portainer webhook…"
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}")
+            -X POST "$PORTAINER_WEBHOOK_URL")
           if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
             echo "Portainer redeploy triggered (HTTP $HTTP_STATUS)"
           else
