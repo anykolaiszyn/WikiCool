@@ -88,13 +88,19 @@ function LoginCard({ onSuccess }: { onSuccess: () => void }) {
         <p className="auth-sub">{config.owner}/{config.repo}</p>
 
         {oauthAvailable && (
-          <button
-            className="auth-btn auth-btn--oauth"
-            type="button"
-            onClick={handleOAuth}
-          >
-            Sign in with GitHub
-          </button>
+          <>
+            <button
+              className="auth-btn auth-btn--oauth"
+              type="button"
+              onClick={handleOAuth}
+            >
+              Sign in with GitHub
+            </button>
+            <p className="auth-scope-note">
+              Grants <code>repo</code> scope (read/write on all your repos).
+              Paste a fine-grained PAT below for narrower access.
+            </p>
+          </>
         )}
 
         {oauthAvailable && (

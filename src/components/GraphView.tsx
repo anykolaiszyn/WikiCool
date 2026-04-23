@@ -34,7 +34,15 @@ const MIN_RADIUS = 5
 const MAX_RADIUS = 22
 const LABEL_ZOOM_THRESHOLD = 1.5
 
-// ── helpers ────────────────────────────────────────────────────────────────
+// ── type aliases ───────────────────────────────────────────────────────────
+
+type SvgSel  = d3.Selection<SVGSVGElement, unknown, null, undefined>
+type RootSel = d3.Selection<SVGGElement,   unknown, null, undefined>
+type NodeSel = d3.Selection<SVGGElement,   GraphNode, SVGGElement, unknown>
+type LinkSel = d3.Selection<SVGLineElement, GraphLink, SVGGElement, unknown>
+type RScale  = d3.ScalePower<number, number, never>
+
+// ── CSS helpers ────────────────────────────────────────────────────────────
 
 function readCssVar(name: string): string {
   if (typeof window === 'undefined') return '#999'
@@ -47,6 +55,137 @@ function resolveColor(value: string): string {
     return readCssVar(varName)
   }
   return value
+}
+
+// ── D3 helpers ─────────────────────────────────────────────────────────────
+
+function createSimulation(
+  nodes: GraphNode[],
+  links: GraphLink[],
+  width: number,
+  height: number,
+  rScale: RScale,
+): d3.Simulation<GraphNode, GraphLink> {
+  return d3
+    .forceSimulation<GraphNode>(nodes)
+    .force(
+      'link',
+      d3.forceLink<GraphNode, GraphLink>(links).id((d) => d.id).distance(60).strength(0.4),
+    )
+    .force('charge', d3.forceManyBody().strength(-180))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collide', d3.forceCollide<GraphNode>((d) => rScale(d.inDegree) + 4))
+}
+
+function appendArrowMarker(svgSel: SvgSel): void {
+  svgSel
+    .append('defs')
+    .append('marker')
+    .attr('id', 'arrow')
+    .attr('viewBox', '0 -4 8 8')
+    .attr('refX', 14)
+    .attr('refY', 0)
+    .attr('markerWidth', 6)
+    .attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,-4L8,0L0,4')
+    .attr('fill', readCssVar('--ink-faint') || '#aaa')
+}
+
+function appendEdges(root: RootSel, links: GraphLink[]): LinkSel {
+  return root
+    .append('g')
+    .attr('class', 'links')
+    .selectAll<SVGLineElement, GraphLink>('line')
+    .data(links)
+    .join('line')
+    .attr('stroke', readCssVar('--ink-faint') || '#aaa')
+    .attr('stroke-width', 1)
+    .attr('stroke-opacity', 0.5)
+    .attr('marker-end', 'url(#arrow)')
+}
+
+function appendNodeGroups(root: RootSel, nodes: GraphNode[], rScale: RScale): NodeSel {
+  const nodeG = root
+    .append('g')
+    .attr('class', 'nodes')
+    .selectAll<SVGGElement, GraphNode>('g')
+    .data(nodes, (d) => d.id)
+    .join('g')
+    .attr('class', 'node-g')
+    .style('cursor', 'pointer')
+
+  nodeG
+    .append('circle')
+    .attr('r', (d) => rScale(d.inDegree))
+    .attr('fill', (d) => resolveColor(TYPE_COLORS[d.type]))
+    .attr('fill-opacity', 0.85)
+    .attr('stroke', (d) => resolveColor(TYPE_COLORS[d.type]))
+    .attr('stroke-width', 1.5)
+
+  nodeG
+    .append('text')
+    .attr('class', 'node-label')
+    .attr('dy', (d) => -(rScale(d.inDegree) + 4))
+    .attr('text-anchor', 'middle')
+    .attr('font-size', 11)
+    .attr('fill', readCssVar('--ink') || '#1a1a1a')
+    .attr('pointer-events', 'none')
+    .text((d) => d.title)
+    .attr('opacity', 0)
+
+  return nodeG
+}
+
+function attachInteractions(
+  nodeG: NodeSel,
+  sim: d3.Simulation<GraphNode, GraphLink>,
+  navigate: (to: string) => void,
+  setHoveredId: (id: string | null) => void,
+): void {
+  const drag = d3
+    .drag<SVGGElement, GraphNode>()
+    .on('start', (event, d) => {
+      if (!event.active) sim.alphaTarget(0.3).restart()
+      d.fx = d.x
+      d.fy = d.y
+    })
+    .on('drag', (event, d) => {
+      d.fx = event.x
+      d.fy = event.y
+    })
+    .on('end', (event, d) => {
+      if (!event.active) sim.alphaTarget(0)
+      d.fx = null
+      d.fy = null
+    })
+
+  nodeG.call(drag)
+  nodeG.on('click', (_event, d) => navigate(`/wiki/${d.id}`))
+  nodeG.on('mouseenter', (_event, d) => setHoveredId(d.id))
+  nodeG.on('mouseleave', () => setHoveredId(null))
+}
+
+function attachZoom(
+  svgSel: SvgSel,
+  root: RootSel,
+  nodeG: NodeSel,
+  zoomRef: { current: d3.ZoomBehavior<SVGSVGElement, unknown> | null },
+  currentZoomRef: { current: number },
+): void {
+  const zoom = d3
+    .zoom<SVGSVGElement, unknown>()
+    .scaleExtent([0.1, 8])
+    .on('zoom', (event) => {
+      root.attr('transform', event.transform)
+      currentZoomRef.current = event.transform.k
+      const showLabels = event.transform.k >= LABEL_ZOOM_THRESHOLD
+      nodeG.select<SVGTextElement>('text.node-label').attr('opacity', showLabels ? 1 : 0)
+    })
+
+  zoomRef.current = zoom
+  svgSel.call(zoom)
 }
 
 // ── component ──────────────────────────────────────────────────────────────
@@ -96,163 +235,37 @@ export function GraphView() {
     const svg = svgRef.current
     if (!svg || nodes.length === 0) return
 
-    // clear previous render
     d3.select(svg).selectAll('*').remove()
 
     const width = svg.clientWidth || 800
     const height = svg.clientHeight || 600
-
-    // radius scale
     const maxIn = Math.max(1, d3.max(nodes, (d) => d.inDegree) ?? 1)
     const rScale = d3.scaleSqrt().domain([0, maxIn]).range([MIN_RADIUS, MAX_RADIUS])
 
-    // simulation
-    const sim = d3
-      .forceSimulation<GraphNode>(nodes)
-      .force(
-        'link',
-        d3
-          .forceLink<GraphNode, GraphLink>(links)
-          .id((d) => d.id)
-          .distance(60)
-          .strength(0.4),
-      )
-      .force('charge', d3.forceManyBody().strength(-180))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collide', d3.forceCollide<GraphNode>((d) => rScale(d.inDegree) + 4))
-
+    const svgSel = d3.select(svg)
+    const root = svgSel.append('g').attr('class', 'graph-root')
+    const sim = createSimulation(nodes, links, width, height, rScale)
     simRef.current = sim
 
-    // root group for zoom
-    const root = d3.select(svg).append('g').attr('class', 'graph-root')
+    appendArrowMarker(svgSel)
+    const linkSel = appendEdges(root, links)
+    const nodeG = appendNodeGroups(root, nodes, rScale)
+    attachInteractions(nodeG, sim, navigate, setHoveredId)
+    attachZoom(svgSel, root, nodeG, zoomRef, currentZoomRef)
 
-    // arrow marker
-    d3.select(svg)
-      .append('defs')
-      .append('marker')
-      .attr('id', 'arrow')
-      .attr('viewBox', '0 -4 8 8')
-      .attr('refX', 14)
-      .attr('refY', 0)
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
-      .attr('orient', 'auto')
-      .append('path')
-      .attr('d', 'M0,-4L8,0L0,4')
-      .attr('fill', readCssVar('--ink-faint') || '#aaa')
-
-    // edges
-    const linkSel = root
-      .append('g')
-      .attr('class', 'links')
-      .selectAll<SVGLineElement, GraphLink>('line')
-      .data(links)
-      .join('line')
-      .attr('stroke', readCssVar('--ink-faint') || '#aaa')
-      .attr('stroke-width', 1)
-      .attr('stroke-opacity', 0.5)
-      .attr('marker-end', 'url(#arrow)')
-
-    // nodes group
-    const nodeG = root
-      .append('g')
-      .attr('class', 'nodes')
-      .selectAll<SVGGElement, GraphNode>('g')
-      .data(nodes, (d) => d.id)
-      .join('g')
-      .attr('class', 'node-g')
-      .style('cursor', 'pointer')
-
-    // circles
-    nodeG
-      .append('circle')
-      .attr('r', (d) => rScale(d.inDegree))
-      .attr('fill', (d) => resolveColor(TYPE_COLORS[d.type]))
-      .attr('fill-opacity', 0.85)
-      .attr('stroke', (d) => resolveColor(TYPE_COLORS[d.type]))
-      .attr('stroke-width', 1.5)
-
-    // labels (hidden until zoom or hover)
-    nodeG
-      .append('text')
-      .attr('class', 'node-label')
-      .attr('dy', (d) => -(rScale(d.inDegree) + 4))
-      .attr('text-anchor', 'middle')
-      .attr('font-size', 11)
-      .attr('fill', readCssVar('--ink') || '#1a1a1a')
-      .attr('pointer-events', 'none')
-      .text((d) => d.title)
-      .attr('opacity', 0)
-
-    // drag
-    const drag = d3
-      .drag<SVGGElement, GraphNode>()
-      .on('start', (event, d) => {
-        if (!event.active) sim.alphaTarget(0.3).restart()
-        d.fx = d.x
-        d.fy = d.y
-      })
-      .on('drag', (event, d) => {
-        d.fx = event.x
-        d.fy = event.y
-      })
-      .on('end', (event, d) => {
-        if (!event.active) sim.alphaTarget(0)
-        d.fx = null
-        d.fy = null
-      })
-
-    nodeG.call(drag)
-
-    // click to navigate
-    nodeG.on('click', (_event, d) => {
-      navigate(`/wiki/${d.id}`)
-    })
-
-    // hover: highlight neighbors
-    nodeG
-      .on('mouseenter', (_event, d) => {
-        setHoveredId(d.id)
-      })
-      .on('mouseleave', () => {
-        setHoveredId(null)
-      })
-
-    // zoom
-    const zoom = d3
-      .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 8])
-      .on('zoom', (event) => {
-        root.attr('transform', event.transform)
-        currentZoomRef.current = event.transform.k
-
-        // show/hide labels based on zoom level
-        const showLabels = event.transform.k >= LABEL_ZOOM_THRESHOLD
-        nodeG
-          .select<SVGTextElement>('text.node-label')
-          .attr('opacity', showLabels ? 1 : 0)
-      })
-
-    zoomRef.current = zoom
-    d3.select(svg).call(zoom)
-
-    // tick
     sim.on('tick', () => {
       linkSel
         .attr('x1', (d) => (d.source as GraphNode).x ?? 0)
         .attr('y1', (d) => (d.source as GraphNode).y ?? 0)
         .attr('x2', (d) => (d.target as GraphNode).x ?? 0)
         .attr('y2', (d) => (d.target as GraphNode).y ?? 0)
-
       nodeG.attr('transform', (d) => `translate(${d.x ?? 0},${d.y ?? 0})`)
     })
 
-    return () => {
-      sim.stop()
-    }
+    return () => { sim.stop() }
   }, [nodes, links, navigate])
 
-  // ── hover highlight effect (runs after D3 render) ──────────────────────
+  // ── hover highlight effect ─────────────────────────────────────────────
 
   useEffect(() => {
     const svg = svgRef.current
@@ -272,14 +285,8 @@ export function GraphView() {
     d3.select(svg)
       .selectAll<SVGGElement, GraphNode>('.node-g')
       .select('circle')
-      .attr('fill-opacity', (d) => {
-        if (hoveredId === null) return 0.85
-        return neighborSet.has(d.id) ? 1 : 0.15
-      })
-      .attr('stroke-opacity', (d) => {
-        if (hoveredId === null) return 1
-        return neighborSet.has(d.id) ? 1 : 0.15
-      })
+      .attr('fill-opacity', (d) => (hoveredId === null ? 0.85 : neighborSet.has(d.id) ? 1 : 0.15))
+      .attr('stroke-opacity', (d) => (hoveredId === null ? 1 : neighborSet.has(d.id) ? 1 : 0.15))
 
     d3.select(svg)
       .selectAll<SVGLineElement, GraphLink>('line')
@@ -290,7 +297,6 @@ export function GraphView() {
         return s === hoveredId || t === hoveredId ? 0.9 : 0.05
       })
 
-    // show label for hovered node if below zoom threshold
     if (currentZoomRef.current < LABEL_ZOOM_THRESHOLD) {
       d3.select(svg)
         .selectAll<SVGTextElement, GraphNode>('.node-g text.node-label')
@@ -329,9 +335,7 @@ export function GraphView() {
   // ── legend ─────────────────────────────────────────────────────────────
 
   const types: Array<PageType | 'unknown'> = ['vendor', 'product', 'sop', 'event', 'person', 'note']
-  const presentTypes = types.filter((t) =>
-    nodes.some((n) => n.type === t),
-  )
+  const presentTypes = types.filter((t) => nodes.some((n) => n.type === t))
 
   return (
     <div className="graph-view">

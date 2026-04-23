@@ -53,6 +53,7 @@ export interface Env {
 const enc = new TextEncoder()
 
 export class BroadcastRoom {
+  private static readonly MAX_CONNECTIONS = 500
   private readonly connections = new Map<string, WritableStreamDefaultWriter<Uint8Array>>()
 
   async fetch(request: Request): Promise<Response> {
@@ -65,6 +66,11 @@ export class BroadcastRoom {
       const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
       const writer = writable.getWriter()
       const id = crypto.randomUUID()
+
+      if (this.connections.size >= BroadcastRoom.MAX_CONNECTIONS) {
+        await writer.close()
+        return new Response('Too Many Connections', { status: 503 })
+      }
 
       this.connections.set(id, writer)
 
@@ -355,7 +361,7 @@ export default {
       try {
         accessToken = await exchangeCode(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET, code)
       } catch (err) {
-        console.error('Token exchange failed:', err)
+        console.error('Token exchange failed:', err instanceof Error ? err.message : String(err))
         return errorRedirect(env.APP_ORIGIN, 'oauth_exchange_failed')
       }
 

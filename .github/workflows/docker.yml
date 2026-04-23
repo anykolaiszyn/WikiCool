@@ -60,7 +60,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── 6. Build and push ───────────────────────────────────────────────────
+      # ── 6. Guard: block build if VITE_GITHUB_TOKEN is set ──────────────────
+      # VITE_GITHUB_TOKEN is baked into the static JS bundle at build time.
+      # If the image is pushed to a public registry (ghcr.io), anyone who
+      # pulls the image can extract the token from the bundle.
+      # Leave VITE_GITHUB_TOKEN unset in CI — users authenticate at runtime
+      # via the login prompt or the OAuth Worker instead.
+      # To allow a baked-in token (private registry only), remove this step.
+      - name: Block build if VITE_GITHUB_TOKEN is set (token would be baked into public image)
+        env:
+          VITE_GITHUB_TOKEN: ${{ secrets.VITE_GITHUB_TOKEN }}
+        run: |
+          if [ -n "$VITE_GITHUB_TOKEN" ]; then
+            echo "::error::VITE_GITHUB_TOKEN is set as a CI secret."
+            echo "This token will be statically embedded in the Docker image and"
+            echo "is extractable by anyone who pulls the image from ghcr.io."
+            echo "Remove the VITE_GITHUB_TOKEN secret and use the runtime login"
+            echo "prompt or OAuth Worker for authentication instead."
+            exit 1
+          fi
+
+      # ── 7. Build and push ───────────────────────────────────────────────────
       #
       # VITE_* variables are baked into the image at build time by Vite.
       # They are sourced from GitHub Actions secrets / variables:
@@ -68,8 +88,8 @@ jobs:
       #   Secrets (Settings → Secrets and variables → Actions → Secrets):
       #     VITE_GITHUB_OWNER   — GitHub username/org that owns the content repo
       #     VITE_GITHUB_REPO    — content repo name (e.g. vcc-wiki-content)
-      #     VITE_GITHUB_TOKEN   — fine-grained PAT for the content repo (optional;
-      #                           leave unset to use the runtime login prompt)
+      #     VITE_GITHUB_TOKEN   — DO NOT set in CI (token embeds in public image;
+      #                           use runtime login prompt or OAuth Worker instead)
       #     PORTAINER_WEBHOOK_URL — Portainer stack webhook URL (optional;
       #                           leave unset to skip auto-redeploy)
       #
@@ -101,7 +121,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ── 7. Trigger Portainer redeploy ────────────────────────────────────────
+      # ── 8. Trigger Portainer redeploy ────────────────────────────────────────
       # Portainer exposes a per-stack webhook URL that pulls the latest image
       # and recreates the container. Set PORTAINER_WEBHOOK_URL as a repo secret
       # to enable automatic redeploy after every successful image push.

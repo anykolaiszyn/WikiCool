@@ -519,6 +519,18 @@ pre code {
 }
 .auth-btn--oauth:hover:not(:disabled) { background-color: #2ea043; }
 
+.auth-scope-note {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  text-align: center;
+  margin: 0.35rem 0 0;
+  line-height: 1.4;
+}
+.auth-scope-note code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+}
+
 /* "or paste a token" divider */
 .auth-divider {
   display: flex;
